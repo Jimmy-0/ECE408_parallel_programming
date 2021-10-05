@@ -100,17 +100,21 @@ int main(int argc, char **argv) {
   dim3 dimGrid(ceil((1.0*numCColumns)/2), ceil((1.0*numCRows)/2),1);
   dim3 dimBlock(2, 2, 1);
   wbTime_start(Compute, "Performing CUDA computation");
+  
   //@@ Launch the GPU Kernel here
   matrixMultiplyShared<<<dimGrid, dimBlock>>>(deviceA, deviceB, deviceC, numARows, numAColumns, numBRows, numBColumns, numCRows, numCColumns);
   cudaDeviceSynchronize();
+  
   wbTime_stop(Compute, "Performing CUDA computation");
 
   wbTime_start(Copy, "Copying output memory to the CPU");
+  
   //@@ Copy the GPU memory back to the CPU here
   cudaMemcpy(hostC, deviceC,numCRows*numCColumns*sizeof(float), cudaMemcpyDeviceToHost);
   wbTime_stop(Copy, "Copying output memory to the CPU");
 
   wbTime_start(GPU, "Freeing GPU Memory");
+  
   //@@ Free the GPU memory here
   cudaFree(deviceA);
   cudaFree(deviceB);
