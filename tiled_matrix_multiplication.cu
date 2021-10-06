@@ -1,53 +1,54 @@
 #include <wb.h>
 
-#define wbCheck(stmt)                                                     \
-  do {                                                                    \
-    cudaError_t err = stmt;                                               \
-    if (err != cudaSuccess) {                                             \
-      wbLog(ERROR, "Failed to run stmt ", #stmt);                         \
-      wbLog(ERROR, "Got CUDA error ...  ", cudaGetErrorString(err));      \
-      return -1;                                                          \
-    }                                                                     \
-  } while (0)
-
 // Compute C = A * B
-__global__ void matrixMultiplyShared(float *A, float *B, float *C,
-                                     int numARows, int numAColumns,
-                                     int numBRows, int numBColumns,
-                                     int numCRows, int numCColumns) {
+__global__ void matrixMultiplyShared(float *A, float *B, float *C,int numARows, int numAColumns,int numBRows, int numBColumns,int numCRows, int numCColumns) {
   //@@ Insert code to implement matrix multiplication here
   //@@ You have to use shared memory for this MP
-  __shared__ float subTileA[2][2];
-  __shared__ float subTileB[2][2];
-  
+  // DRAM is slow -> use shared memory instead
+  __shared__ float subTileA[2][2]; // Constant row, loop varying column
+  __shared__ float subTileB[2][2]; // Constatn column, loop varying row
+
+// Actual Calculation: subTileA[ty][k] * subTileB[k][tx];
+
   int bx = blockIdx.x; int by = blockIdx.y;
   int tx = threadIdx.x; int ty = threadIdx.y;
+
+//Calculate global row and column position for the thread
   int Row = by * 2 + ty;
   int Col = bx * 2 + tx;
+
   float Pvalue = 0;
-  
+
+// Loop over the tiles required to comput P element  
   for (int m = 0; m < (numAColumns-1)/2 + 1; ++m) {
+// (numAColumns-1)/TILE_SIZE + 1
+
+
+// Collaborative load of A, B tiles into shated memory
     if (Row < numCRows && m*2+tx < numAColumns) {
-      subTileA[ty][tx] = A[Row*numAColumns + m*2 + tx];
+      subTileA[ty][tx] = A[Row * numAColumns + (m*2 + tx)];
     } else {
       subTileA[ty][tx] = 0;
-    }
+      }
     if (m*2+ty< numAColumns && Col < numCColumns) {
-      subTileB[ty][tx] = B[(m*2+ty)*numBColumns + Col];
+      subTileB[ty][tx] = B[(m*2+ty) * numBColumns + Col];
     } else {
       subTileB[ty][tx] = 0;
-    }
+      }
+
     __syncthreads();
+
     if (Row < numCRows && Col < numCColumns) {
       for (int k = 0; k < 2; ++k) {
         Pvalue += subTileA[ty][k] * subTileB[k][tx];
+        }
       }
-    }
     __syncthreads();
   }
+
   if (Row < numCRows && Col < numCColumns) {
     C[Row * numCColumns + Col] = Pvalue;
-  }
+    }
 }
 
 int main(int argc, char **argv) {
